@@ -1,3 +1,7 @@
+import json
+import os
+from pathlib import Path
+
 import mlflow
 import pandas as pd
 from mlflow.tracking import MlflowClient
@@ -13,6 +17,19 @@ def load_latest_model():
     threshold = float(client.get_run(latest.run_id).data.params["threshold"])
     model = mlflow.lightgbm.load_model(f"models:/{config.MODEL_NAME}/{latest.version}")
     return model, threshold
+
+
+def load_exported_model(model_dir):
+    model_dir = Path(model_dir)
+    model = mlflow.lightgbm.load_model(str(model_dir))
+    threshold = json.loads((model_dir / "threshold.json").read_text())["threshold"]
+    return model, threshold
+
+
+def load_model():
+    """Use MODEL_DIR if set (Docker/cloud); otherwise the local MLflow model registry."""
+    model_dir = os.getenv("MODEL_DIR")
+    return load_exported_model(model_dir) if model_dir else load_latest_model()
 
 
 def predict(df, model=None, threshold=None):

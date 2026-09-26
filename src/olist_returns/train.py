@@ -8,6 +8,8 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from olist_returns import config
+import json
+import shutil
 
 
 def load_splits(path=config.MODEL_TABLE):
@@ -60,6 +62,14 @@ def main():
         mlflow.lightgbm.log_model(
             lgb_model=model, name="model", registered_model_name=config.MODEL_NAME
         )
+
+        export_dir = config.ROOT / "models" / "latest"
+        shutil.rmtree(export_dir, ignore_errors=True)
+        mlflow.lightgbm.save_model(
+            lgb_model=model, path=export_dir, model_format="lightgbm"
+        )
+        (export_dir / "threshold.json").write_text(json.dumps({"threshold": threshold}))
+
     print(
         f"Valid PR-AUC: {average_precision_score(y_va, p_va):.4f} | "
         f"threshold: {threshold:.4f}"

@@ -1,0 +1,8 @@
+.git
+data/
+notebooks/
+mlruns/
+mlflow.db
+mlartifacts/
+__pycache__/
+*.egg-info/
