@@ -5,9 +5,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ENV PYTHONPATH=/app/src
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+COPY pyproject.toml .
+COPY src/ src/
+RUN pip install --no-cache-dir --no-deps .
 
 COPY models/latest/ models/latest/
 ENV MODEL_DIR=/app/models/latest

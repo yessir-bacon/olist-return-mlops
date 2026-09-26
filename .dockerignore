@@ -4,5 +4,5 @@ notebooks/
 mlruns/
 mlflow.db
 mlartifacts/
-__pycache__/
-*.egg-info/
+**/__pycache__/
+**/*.egg-info/
