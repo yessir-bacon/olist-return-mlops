@@ -4,7 +4,7 @@ import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from olist_returns.predict import load_latest_model, predict
+from olist_returns.predict import load_model, predict
 
 
 class Order(BaseModel):
@@ -37,7 +37,7 @@ state = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load the model once at startup, not on every request
-    state["model"], state["threshold"] = load_latest_model()
+    state["model"], state["threshold"] = load_model()
     yield
 
 
