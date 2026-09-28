@@ -6,7 +6,7 @@ Negative reviews serve as a proxy for customer dissatisfaction and returns, so f
 can be targeted with proactive outreach.
 
 The project takes a model from notebook to a containerized prediction service, with experiment
-tracking, a model registry, and tested pipeline code.
+tracking, a model registry, orchestrated retraining, and tested pipeline code.
 
 ## Architecture
 
@@ -20,6 +20,9 @@ flowchart LR
     E --> G[models/latest]
     G --> H[FastAPI service]
     H --> I[Docker container]
+    P[Prefect flows] -.orchestrates.-> B
+    P -.-> C
+    P -.-> E
 ```
 
 ## Results
@@ -50,6 +53,26 @@ The decision threshold was chosen on validation by maximizing F1.
 - **The time-based split was kept as-is** to reflect realistic production performance. The drop
   from validation to test PR-AUC is an expected result of this shift, not overfitting.
 
+## Monthly retraining replay
+
+A Prefect flow simulates production by retraining each month on the data available so far
+and scoring the following month.
+
+| Month | PR-AUC | Base rate | Lift |
+|---|---|---|---|
+| 2018-01 | 0.511 | 0.137 | 3.7x |
+| 2018-02 | 0.641 | 0.194 | 3.3x |
+| 2018-03 | 0.672 | 0.212 | 3.2x |
+| 2018-04 | 0.435 | 0.118 | 3.7x |
+| 2018-05 | 0.364 | 0.108 | 3.4x |
+| 2018-06 | 0.280 | 0.100 | 2.8x |
+| 2018-07 | 0.283 | 0.097 | 2.9x |
+| 2018-08 | 0.375 | 0.095 | 3.9x |
+
+Raw PR-AUC swings with the share of late deliveries, peaking during the Feb–Mar 2018 delivery
+spike, but lift over the base rate stays between 2.8x and 3.9x. The model is stable; the
+amount of predictable, delivery-driven dissatisfaction is what changes.
+
 ## Design decisions
 
 - **No leakage:** features use only information available by delivery time. Review text and
@@ -67,7 +90,8 @@ src/olist_returns/
 ├── features.py    # build the modeling table
 ├── train.py       # train, choose threshold, log and register model
 ├── predict.py     # load model and score orders
-└── api.py         # FastAPI service
+├── api.py         # FastAPI service
+└── flows.py       # Prefect training and monthly replay flows
 notebooks/         # EDA and model development
 tests/             # unit tests
 Dockerfile
@@ -77,7 +101,7 @@ Dockerfile
 
 **Setup**
 ```bash
-conda create -n olist-returns python=3.11 -y
+conda create -n olist-returns python=3.13 -y
 conda activate olist-returns
 pip install -r requirements-dev.txt
 pip install -e .
@@ -89,6 +113,12 @@ Download the dataset from Kaggle and unzip the CSVs into `data/raw/`.
 python -m olist_returns.features   # build the modeling table
 python -m olist_returns.train      # train and register the model
 pytest                             # run tests
+```
+
+**Orchestrated with Prefect**
+```bash
+python -m olist_returns.flows          # full training pipeline
+python -m olist_returns.flows replay   # monthly retraining replay
 ```
 
 **API with Docker**
@@ -105,11 +135,11 @@ Then open `http://localhost:8080/docs` to try the `/health` and `/predict` endpo
 - [x] Modular pipeline with unit tests
 - [x] FastAPI prediction service
 - [x] Docker containerization
-- [ ] Prefect orchestration with monthly retraining
+- [x] Prefect orchestration with monthly retraining
 - [ ] Deployment to GCP Cloud Run
 - [ ] Drift monitoring with Evidently
 - [ ] CI/CD with GitHub Actions
 
 ## Author
 
-Mason Fuller · [LinkedIn](https://www.linkedin.com/in/mason1fuller/)
+Mason Fuller · [LinkedIn](https://linkedin.com/in/mason1fuller)
