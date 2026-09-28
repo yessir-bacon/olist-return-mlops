@@ -1,8 +1,11 @@
+import pandas as pd
+
 from olist_returns import config
 from olist_returns.ingest import load_raw
 
 
-def build_label(orders, reviews):
+def build_label(orders: pd.DataFrame, reviews: pd.DataFrame) -> pd.DataFrame:
+    """Keep delivered orders, attach the latest review, and create the label."""
     latest = reviews.sort_values("review_creation_date").drop_duplicates(
         "order_id", keep="last"
     )
@@ -15,7 +18,7 @@ def build_label(orders, reviews):
     return df
 
 
-def add_delivery_features(df):
+def add_delivery_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     purchase = df["order_purchase_timestamp"]
     df["delivery_days"] = (df["order_delivered_customer_date"] - purchase).dt.days
@@ -27,7 +30,9 @@ def add_delivery_features(df):
     return df
 
 
-def add_item_features(df, items, products):
+def add_item_features(
+    df: pd.DataFrame, items: pd.DataFrame, products: pd.DataFrame
+) -> pd.DataFrame:
     feats = (
         items.merge(products, on="product_id", how="left")
         .groupby("order_id")
@@ -46,7 +51,7 @@ def add_item_features(df, items, products):
     return df
 
 
-def add_payment_features(df, payments):
+def add_payment_features(df: pd.DataFrame, payments: pd.DataFrame) -> pd.DataFrame:
     feats = (
         payments.groupby("order_id")
         .agg(
@@ -58,16 +63,19 @@ def add_payment_features(df, payments):
     return df.merge(feats, on="order_id", how="left")
 
 
-def assign_split(df):
+def assign_split(
+    df: pd.DataFrame, valid_start=config.VALID_START, test_start=config.TEST_START
+) -> pd.DataFrame:
     ts = df["order_purchase_timestamp"]
     df = df[(ts >= config.DATA_START) & (ts < config.DATA_END)].copy()
     df["split"] = "train"
-    df.loc[df["order_purchase_timestamp"] >= config.VALID_START, "split"] = "valid"
-    df.loc[df["order_purchase_timestamp"] >= config.TEST_START, "split"] = "test"
+    df.loc[df["order_purchase_timestamp"] >= valid_start, "split"] = "valid"
+    df.loc[df["order_purchase_timestamp"] >= test_start, "split"] = "test"
     return df
 
 
-def build_model_table(raw):
+def build_base_table(raw: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Features and label for every order in the data window, without a split."""
     df = build_label(raw["orders"], raw["reviews"])
     df = add_delivery_features(df)
     df = add_item_features(df, raw["items"], raw["products"])
@@ -77,9 +85,16 @@ def build_model_table(raw):
         on="customer_id",
         how="left",
     )
-    df = assign_split(df)
-    base_cols = ["order_id", "order_purchase_timestamp", "split", "label"]
-    return df[base_cols + config.FEATURES]
+    ts = df["order_purchase_timestamp"]
+    df = df[(ts >= config.DATA_START) & (ts < config.DATA_END)]
+    return df[["order_id", "order_purchase_timestamp", "label", *config.FEATURES]]
+
+
+def build_model_table(raw: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    df = assign_split(build_base_table(raw))
+    return df[
+        ["order_id", "order_purchase_timestamp", "split", "label", *config.FEATURES]
+    ]
 
 
 def main():
