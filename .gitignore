@@ -15,3 +15,5 @@ mlruns/
 # MLflow
 mlflow.db
 mlartifacts/
+
+models/

@@ -1,0 +1,36 @@
+[
+  {
+    "order_id": "test-late",
+    "main_category": "cama_mesa_banho",
+    "payment_type": "credit_card",
+    "customer_state": "SP",
+    "delivery_days": 25,
+    "estimated_days": 15,
+    "delayed_days": 10,
+    "is_late": 1,
+    "n_items": 2,
+    "n_sellers": 2,
+    "total_price": 150.0,
+    "total_freight": 30.0,
+    "freight_ratio": 0.2,
+    "avg_weight_g": 1200,
+    "max_installments": 3
+  },
+  {
+    "order_id": "test-ontime",
+    "main_category": "cama_mesa_banho",
+    "payment_type": "credit_card",
+    "customer_state": "SP",
+    "delivery_days": 7,
+    "estimated_days": 15,
+    "delayed_days": -8,
+    "is_late": 0,
+    "n_items": 1,
+    "n_sellers": 1,
+    "total_price": 80.0,
+    "total_freight": 12.0,
+    "freight_ratio": 0.15,
+    "avg_weight_g": 600,
+    "max_installments": 1
+  }
+]
