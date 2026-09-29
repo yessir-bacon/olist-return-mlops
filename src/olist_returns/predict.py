@@ -10,6 +10,7 @@ from olist_returns import config
 
 
 def load_latest_model():
+    """Load the newest registered model from the local MLflow registry."""
     mlflow.set_tracking_uri(config.MLFLOW_URI)
     client = MlflowClient()
     versions = client.search_model_versions(f"name='{config.MODEL_NAME}'")
@@ -19,22 +20,23 @@ def load_latest_model():
     return model, threshold
 
 
-def load_exported_model(model_dir):
-    model_dir = Path(model_dir)
-    model = mlflow.lightgbm.load_model(str(model_dir))
-    threshold = json.loads((model_dir / "threshold.json").read_text())["threshold"]
+def load_exported_model(model_dir: str):
+    """Load an exported model from a local folder or a gs:// URI."""
+    local_dir = Path(mlflow.artifacts.download_artifacts(artifact_uri=model_dir))
+    model = mlflow.lightgbm.load_model(str(local_dir))
+    threshold = json.loads((local_dir / "threshold.json").read_text())["threshold"]
     return model, threshold
 
 
 def load_model():
-    """Use MODEL_DIR if set (Docker/cloud); otherwise the local MLflow model registry."""
+    """Use MODEL_DIR if set (Docker/cloud); otherwise the local MLflow registry."""
     model_dir = os.getenv("MODEL_DIR")
     return load_exported_model(model_dir) if model_dir else load_latest_model()
 
 
-def predict(df, model=None, threshold=None):
+def predict(df: pd.DataFrame, model=None, threshold=None) -> pd.DataFrame:
     if model is None:
-        model, threshold = load_latest_model()
+        model, threshold = load_model()
     X = df[config.FEATURES].copy()
     for c in config.CAT_COLS:
         X[c] = X[c].astype("category")
