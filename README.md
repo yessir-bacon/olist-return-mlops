@@ -6,10 +6,10 @@ Negative reviews serve as a proxy for customer dissatisfaction and returns, so f
 can be targeted with proactive outreach.
 
 The project takes a model from notebook to a live cloud API, with experiment tracking, a model
-registry, orchestrated retraining, and tested pipeline code.
+registry, orchestrated retraining, drift monitoring, and tested pipeline code.
 
-**Live API:** [https://olist-api-xwf7nkgo2q-uc.a.run.app/docs](https://olist-api-xwf7nkgo2q-uc.a.run.app/docs). The first request may take
-10–20 seconds while the service starts from zero.
+**Live API:** [https://olist-api-xwf7nkgo2q-uc.a.run.app/docs](https://olist-api-xwf7nkgo2q-uc.a.run.app/docs).
+The first request may take 10–20 seconds while the service starts from zero.
 
 ## Architecture
 
@@ -23,9 +23,12 @@ flowchart LR
     E --> G[Exported model]
     G --> S[(GCP Cloud Storage)]
     S --> H[FastAPI on GCP Cloud Run]
+    D --> M[drift.py / Evidently]
+    M -.triggers retrain.-> E
     P[Prefect flows] -.orchestrates.-> B
     P -.-> C
     P -.-> E
+    P -.-> M
 ```
 
 ## Results
@@ -76,6 +79,25 @@ Raw PR-AUC swings with the share of late deliveries, peaking during the Feb–Ma
 spike, but lift over the base rate stays between 2.8x and 3.9x. The model is stable; the
 amount of predictable, delivery-driven dissatisfaction is what changes.
 
+## Drift monitoring
+
+A second Prefect flow uses [Evidently](https://github.com/evidentlyai/evidently) to compare
+each month's orders against the current model's training data, and retrains only when the
+share of drifted features exceeds a threshold.
+
+| Strategy | Retrains | Avg next-month PR-AUC |
+|---|---|---|
+| Always retrain monthly | 8 | 0.445 |
+| Drift threshold 0.3 | 7 | 0.446 |
+| **Drift threshold 0.4** | **3** | **0.443** |
+
+A 0.4 threshold cut retraining by over 60% for a 0.002 drop in average PR-AUC.
+
+Overall drift share turned out to be a noisy signal: 4–6 of 14 features drift every month,
+because Evidently's tests flag even small seasonal shifts at these sample sizes, and drift
+share doesn't track performance closely. A natural next step would be triggering on drift in
+the key delivery features or on observed performance once labels arrive.
+
 ## Design decisions
 
 - **No leakage:** features use only information available by delivery time. Review text and
@@ -95,8 +117,9 @@ src/olist_returns/
 ├── features.py    # build the modeling table
 ├── train.py       # train, choose threshold, log, register, and export model
 ├── predict.py     # load model (local registry or Cloud Storage) and score orders
+├── drift.py       # Evidently drift reports and drift share
 ├── api.py         # FastAPI service
-└── flows.py       # Prefect training and monthly replay flows
+└── flows.py       # Prefect training, replay, and drift monitoring flows
 notebooks/         # EDA and model development
 tests/             # unit tests
 Dockerfile
@@ -124,6 +147,7 @@ pytest                             # run tests
 ```bash
 python -m olist_returns.flows          # full training pipeline
 python -m olist_returns.flows replay   # monthly retraining replay
+python -m olist_returns.flows drift    # drift-triggered retraining (reports saved to reports/)
 ```
 
 **API with Docker (local)**
@@ -159,7 +183,7 @@ gcloud run deploy olist-api \
 - [x] Docker containerization
 - [x] Prefect orchestration with monthly retraining
 - [x] Deployment to GCP Cloud Run, with the model served from Cloud Storage
-- [ ] Drift monitoring with Evidently
+- [x] Drift monitoring with Evidently and drift-triggered retraining
 - [ ] CI/CD with GitHub Actions
 
 ## Author
