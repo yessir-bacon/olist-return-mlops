@@ -40,3 +40,6 @@ LGBM_PARAMS = dict(
     random_state=42,
     verbose=-1,
 )
+
+REPORT_DIR = ROOT / "reports"
+DRIFT_THRESHOLD = 0.4  # retrain when more than 40% of features drift

@@ -6,6 +6,7 @@ from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 
 from olist_returns import config
+from olist_returns.drift import drift_report, drift_share
 from olist_returns.features import assign_split, build_base_table
 from olist_returns.ingest import load_raw
 from olist_returns.train import evaluate, setup_mlflow, to_category, train_model
@@ -54,6 +55,14 @@ def retrain_and_evaluate(train, valid, next_month, cutoff):
     return {"month": f"{cutoff:%Y-%m}", **metrics}
 
 
+@task(cache_policy=NO_CACHE)
+def check_drift(reference, current, month):
+    snapshot = drift_report(reference, current)
+    config.REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    snapshot.save_html(str(config.REPORT_DIR / f"drift_{month}.html"))
+    return drift_share(snapshot)
+
+
 @flow(name="olist-training-pipeline", log_prints=True)
 def training_pipeline():
     setup_mlflow()
@@ -81,8 +90,53 @@ def monthly_replay(start="2018-01-01", end="2018-08-01"):
     return summary
 
 
+@flow(name="olist-drift-monitoring", log_prints=True)
+def drift_monitoring(
+    start="2018-01-01", end="2018-08-01", threshold=config.DRIFT_THRESHOLD
+):
+    """Each month, compare the last month of orders to the current model's
+    training data, and retrain only when drift exceeds the threshold."""
+    setup_mlflow()
+    df = build_features(ingest())
+    ts = df["order_purchase_timestamp"]
+    model = model_threshold = reference = None
+    results = []
+
+    for cutoff in pd.date_range(start, end, freq="MS"):
+        month = f"{cutoff:%Y-%m}"
+        train, valid, next_month = split_for_cutoff(df, cutoff)
+        current = df[(ts >= cutoff - pd.DateOffset(months=1)) & (ts < cutoff)]
+
+        share = (
+            check_drift(reference, current, month) if reference is not None else None
+        )
+        retrain = model is None or share > threshold
+        if retrain:
+            model, model_threshold, _, _ = train_model(
+                train,
+                valid,
+                run_name=f"drift_retrain_{month}",
+                tags={"flow": "drift_monitoring", "cutoff": month},
+            )
+            reference = train
+
+        metrics = evaluate(model, model_threshold, next_month)
+        results.append(
+            {"month": month, "drift_share": share, "retrained": retrain, **metrics}
+        )
+
+    summary = pd.DataFrame(results)
+    cols = ["month", "drift_share", "retrained", "pr_auc", "base_rate"]
+    print("\n" + summary[cols].round(3).to_string(index=False))
+    print(f"Retrained {int(summary['retrained'].sum())} of {len(summary)} months")
+    return summary
+
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "replay":
-        monthly_replay()
-    else:
-        training_pipeline()
+    command = sys.argv[1] if len(sys.argv) > 1 else "train"
+    flows = {
+        "train": training_pipeline,
+        "replay": monthly_replay,
+        "drift": drift_monitoring,
+    }
+    flows[command]()
