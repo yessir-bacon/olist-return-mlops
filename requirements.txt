@@ -11,3 +11,4 @@ shap==0.52.0
 skops==0.15.0
 uvicorn==0.53.0
 google-cloud-storage==3.15.1
+evidently==0.7.23
