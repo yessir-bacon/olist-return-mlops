@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 
 import mlflow
@@ -20,9 +21,32 @@ def load_latest_model():
     return model, threshold
 
 
+def _download_gcs_dir(uri: str) -> Path:
+    """Download every file under a gs://bucket/prefix to a local temp folder."""
+    from google.cloud import storage
+
+    bucket_name, _, prefix = uri.removeprefix("gs://").partition("/")
+    prefix = prefix.rstrip("/") + "/"
+    local_dir = Path(tempfile.mkdtemp())
+
+    for blob in storage.Client().list_blobs(bucket_name, prefix=prefix):
+        if blob.name.endswith("/"):
+            continue
+        dest = local_dir / blob.name[len(prefix) :]
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        blob.download_to_filename(str(dest))
+
+    if not any(local_dir.iterdir()):
+        raise FileNotFoundError(f"No model files found at {uri}")
+    return local_dir
+
+
 def load_exported_model(model_dir: str):
     """Load an exported model from a local folder or a gs:// URI."""
-    local_dir = Path(mlflow.artifacts.download_artifacts(artifact_uri=model_dir))
+    if model_dir.startswith("gs://"):
+        local_dir = _download_gcs_dir(model_dir)
+    else:
+        local_dir = Path(model_dir)
     model = mlflow.lightgbm.load_model(str(local_dir))
     threshold = json.loads((local_dir / "threshold.json").read_text())["threshold"]
     return model, threshold
