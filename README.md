@@ -1,5 +1,8 @@
 # Olist Bad Review Prediction: End-to-End MLOps
 
+[![CI](https://github.com/yessir-bacon/olist-return-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/yessir-bacon/olist-return-mlops/actions/workflows/ci.yml)
+[![Deploy](https://github.com/yessir-bacon/olist-return-mlops/actions/workflows/deploy.yml/badge.svg)](https://github.com/yessir-bacon/olist-return-mlops/actions/workflows/deploy.yml)
+
 Predicts which e-commerce orders will receive a negative review (1–2 stars) using the
 [Olist Brazilian E-Commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
 Negative reviews serve as a proxy for customer dissatisfaction and returns, so flagged orders
@@ -184,7 +187,7 @@ gcloud run deploy olist-api \
 - [x] Prefect orchestration with monthly retraining
 - [x] Deployment to GCP Cloud Run, with the model served from Cloud Storage
 - [x] Drift monitoring with Evidently and drift-triggered retraining
-- [ ] CI/CD with GitHub Actions
+- [x] CI/CD with GitHub Actions (lint and tests on PRs, auto-deploy to Cloud Run on merge)
 
 ## Author
 
